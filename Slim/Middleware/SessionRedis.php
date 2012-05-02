@@ -18,15 +18,14 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	public function __construct( $settings = array() )
 	{
 		$this->settings = array_merge(array(
-			'expires'		=> (1000*60*20), 			// session lifetime
-			'name'			=> 'slim_session',			// session name
+			'expires'		=> (1000*60*20), // session lifetime
+			'name'			=> 'slim_session', // session name
 		), $settings);
 
 		// if the setting for the expire is a string typecast it as an int
-        if ( is_string($this->settings['expires']) )
-        	$this->settings['expires'] = (Int) $this->settings['expires'];
-
-        // overwrite the default session handler to use this classes methods instead
+		if ( is_string($this->settings['expires']) )
+			$this->settings['expires'] = (Int) $this->settings['expires'];
+		// overwrite the default session handler to use this classes methods instead
 		session_set_save_handler(
 			array($this, 'open'),
 			array($this, 'close'),
@@ -59,7 +58,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * @return true
 	 */
-	protected function open( $path, $name )
+	public function open( $path, $name )
 	{
 		$this->redis = new Redis();
 		$this->redis->connect('127.0.0.1');
@@ -71,9 +70,9 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * @return true
 	 */
-	protected function close()
+	public function close()
 	{
-		return true;
+		return true;	
 	}
 
 	/**
@@ -132,17 +131,19 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * @return true
 	 */
-	protected function gc()
+	public function gc()
 	{
 		// Take out the trash
 		return true;
 	}
-
+	
 	/**
-	 * Destructors
+	 * Destructor
+	 *
+	 * do things
 	 *
 	 * @return void
-	 */
+	 */	
 	public function __destruct()
 	{
 		session_write_close();
