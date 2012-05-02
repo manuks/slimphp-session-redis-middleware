@@ -6,8 +6,8 @@ Middleware to use Redis as your PHP Session store in SlimPHP
 use
 ================================
 
+```php
 $app->add($session = new Slim_Middleware_SessionRedis());
-
 $app->get('/', function()
 use ($app, $session){
 	if ( !$_SESSION ) {
@@ -17,3 +17,4 @@ use ($app, $session){
 	}
 	print_r($_SESSION);
 });
+```
