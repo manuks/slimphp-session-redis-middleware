@@ -17,14 +17,31 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function __construct( $settings = array() )
 	{
+		// A neat way of doing setting initialization with default values
 		$this->settings = array_merge(array(
-			'expires'		=> (1000*60*20), // session lifetime
-			'name'			=> 'slim_session', // session name
+			'expires'			=> ini_get('session.gc_maxlifetime'),
+			'name'				=> 'slim_session',
+			'cookie.lifetime'	=> 0,
+			'cookie.path'		=> '/',
+			'cookie.domain'		=> '',
+			'cookie.secure'		=> false,
+			'cookie.httponly'	=> true
 		), $settings);
 
-		// if the setting for the expire is a string typecast it as an int
+		// if the setting for the expire is a string convert it to an int
 		if ( is_string($this->settings['expires']) )
-			$this->settings['expires'] = (Int) $this->settings['expires'];
+			$this->settings['expires'] = intval($this->settings['expires']);
+
+		// cookies blah!
+		session_name($this->settings['name']);
+		session_set_cookie_params(
+			$this->settings['cookie.lifetime'],
+			$this->settings['cookie.path'],
+			$this->settings['cookie.domain'],
+			$this->settings['cookie.secure'],
+			$this->settings['cookie.httponly']
+		);
+
 		// overwrite the default session handler to use this classes methods instead
 		session_set_save_handler(
 			array($this, 'open'),
@@ -33,7 +50,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 			array($this, 'write'),
 			array($this, 'destroy'),
 			array($this, 'gc')
-		);
+		);		
 	}
 
 	/**
@@ -58,7 +75,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * @return true
 	 */
-	public function open( $path, $name )
+	public function open( $session_path, $session_name )
 	{
 		$this->redis = new Redis();
 		$this->redis->connect('127.0.0.1');
@@ -94,11 +111,16 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * reads session data
 	 *
-	 * @return null
+	 * @return Array
 	 */
 	public function read( $session_id )
 	{
-		return $this->redis->get($session_id);
+		// if our session has expired we don't wish to return the data so return the destroy method
+		if ( $this->redis->hGet($session_id, 'expires') < time() ) {
+			return $this->redis->destroy($session_id);
+		}
+		// retrieve the data for our session
+		return $this->redis->hGet($session_id, 'data');
 	}
 
 	/**
@@ -106,11 +128,26 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 *
 	 * writes session data
 	 *
-	 * @return null
+	 * @return True|False
 	 */
 	public function write( $session_id, $session_data )
 	{
-		return $this->redis->set($session_id, $session_data);
+		// if our key exists, and it has expired, we return the destroy method
+		if ( $this->redis->exists($session_id)  && $this->redis->hGet($session_id, 'expires') < time() ) {
+			return $this->redis->destroy($session_id);
+		}
+		
+		// if cookie.lifetime is set to 0 and there is no existing key in the database we set the expire time to 1 year
+		// think autologin
+		if ( $this->settings['cookie.lifetime'] == 0 && !$this->redis->exists($session_id) ) {
+			$this->redis->hSet( $session_id, 'expires', (time() + 100000) );
+		// else if the cookie lifetime is NOT endless, we set the expire time to now + settings defined lifetime
+		} else if ( $this->settings['cookie.lifetime'] != 0 ) {
+			$this->redis->hSet( $session_id, 'expires', (time() + $this->settings['expires']) );
+		}
+		
+		// finally we set the data for our session		
+		return $this->redis->hSet( $session_id, 'data', $session_data );
 	}
 
 	/**
@@ -136,7 +173,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 		// Take out the trash
 		return true;
 	}
-	
+
 	/**
 	 * Destructor
 	 *
