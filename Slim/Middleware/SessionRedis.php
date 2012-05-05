@@ -1,4 +1,18 @@
 <?php
+/**
+ * Session Redis
+ *
+ * This class provides a session store for SlimPHP using Redis
+ * memory data storage.
+ *
+ * This is still in it's early stages so it doesn't do much beyond basic functionality
+ * nor does it perform garbage collection, yet.
+ *
+ * @package  Slim
+ * @author   importlogic
+ * @depends  phpredis(https://github.com/nicolasff/phpredis)
+ * @version  0.1
+ */
 class Slim_Middleware_SessionRedis extends Slim_Middleware
 {
 	// stores settings
@@ -19,8 +33,8 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	{
 		// A neat way of doing setting initialization with default values
 		$this->settings = array_merge(array(
-			'expires'		=> ini_get('session.gc_maxlifetime'),
-			'name'			=> 'slim_session',
+			'expires'			=> ini_get('session.gc_maxlifetime'),
+			'name'				=> 'slim_session',
 			'cookie.lifetime'	=> 0,
 			'cookie.path'		=> '/',
 			'cookie.domain'		=> '',
@@ -50,7 +64,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 			array($this, 'write'),
 			array($this, 'destroy'),
 			array($this, 'gc')
-		);
+		);		
 	}
 
 	/**
@@ -89,7 +103,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function close()
 	{
-		return true;
+		return true;	
 	}
 
 	/**
@@ -136,7 +150,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 		if ( $this->redis->exists($session_id)  && $this->redis->hGet($session_id, 'expires') < time() ) {
 			return $this->redis->destroy($session_id);
 		}
-
+		
 		// if cookie.lifetime is set to 0 and there is no existing key in the database we set the expire time to 1 year
 		// think autologin
 		if ( $this->settings['cookie.lifetime'] === 0 && !$this->redis->exists($session_id) ) {
@@ -145,8 +159,8 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 		} else if ( $this->settings['cookie.lifetime'] != 0 ) {
 			$this->redis->hSet( $session_id, 'expires', (time() + $this->settings['expires']) );
 		}
-
-		// finally we set the data for our session
+		
+		// finally we set the data for our session		
 		return $this->redis->hSet( $session_id, 'data', $session_data );
 	}
 
@@ -180,7 +194,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 * do things
 	 *
 	 * @return void
-	 */
+	 */	
 	public function __destruct()
 	{
 		session_write_close();
