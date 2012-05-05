@@ -139,8 +139,8 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 		
 		// if cookie.lifetime is set to 0 and there is no existing key in the database we set the expire time to 1 year
 		// think autologin
-		if ( $this->settings['cookie.lifetime'] == 0 && !$this->redis->exists($session_id) ) {
-			$this->redis->hSet( $session_id, 'expires', (time() + 100000) );
+		if ( $this->settings['cookie.lifetime'] === 0 && !$this->redis->exists($session_id) ) {
+			$this->redis->hSet( $session_id, 'expires', (time() + 31556926) );
 		// else if the cookie lifetime is NOT endless, we set the expire time to now + settings defined lifetime
 		} else if ( $this->settings['cookie.lifetime'] != 0 ) {
 			$this->redis->hSet( $session_id, 'expires', (time() + $this->settings['expires']) );
