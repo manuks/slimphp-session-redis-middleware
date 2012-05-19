@@ -21,6 +21,8 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	// stores redis object
 	protected $redis;
 
+	protected $session_stat = array();
+
 	/**
 	 * Constructor
 	 *
@@ -39,7 +41,8 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 			'cookie.path'		=> '/',
 			'cookie.domain'		=> '',
 			'cookie.secure'		=> false,
-			'cookie.httponly'	=> true
+			'cookie.httponly'	=> true,
+			'sessionid'		=> ''
 		), $settings);
 
 		// if the setting for the expire is a string convert it to an int
@@ -65,6 +68,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 			array($this, 'destroy'),
 			array($this, 'gc')
 		);
+		register_shutdown_function('session_write_close');
 	}
 
 	/**
@@ -76,6 +80,9 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function call()
 	{
+
+		session_id($this->settings['sessionid']);
+
 		// start our session
 		session_start();
 		// tell slim it's ok to continue!
@@ -92,7 +99,9 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	public function open( $session_path, $session_name )
 	{
 		$this->redis = new Redis();
-		$this->redis->connect('127.0.0.1');
+		$this->redis->pconnect('127.0.0.1', 6379, 2);
+		//$this->redis->select($session_name);
+		
 		return true;
 	}
 
@@ -103,22 +112,10 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function close()
 	{
+		$this->redis = null;
 		return true;
 	}
 
-	/**
-	 * regenerate_id
-	 *
-	 * regenerates the session id and destroys the previous one
-	 *
-	 * @return void
-	 */
-	public function regenerate_id()
-	{
-		$session_id = session_id();
-		session_regenerate_id();
-		$this->destroy($session_id);
-	}
 
 	/**
 	 * read
@@ -129,12 +126,16 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function read( $session_id )
 	{
-		// if our session has expired we don't wish to return the data so return the destroy method
-		if ( $this->redis->exists($session_id) && $this->redis->hGet($session_id, 'expires') < time() ) {
-			return $this->destroy($session_id);
+		$key = session_name().":".$session_id;
+
+		$sess_data = $this->redis->get($key);
+		if ($sess_data === NULL)
+		{
+			return "";
 		}
-		// retrieve the data for our session
-		return $this->redis->hGet($session_id, 'data');
+		$this->redis->session_stat[$key] = md5($sess_data);
+	
+		return $sess_data;
 	}
 
 	/**
@@ -146,22 +147,17 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function write( $session_id, $session_data )
 	{
-		// if our key exists, and it has expired, we return the destroy method
-		if ( $this->redis->exists($session_id)  && $this->redis->hGet($session_id, 'expires') < time() ) {
-			return $this->redis->destroy($session_id);
+		$key = session_name().":".$session_id;
+		$lifetime = $this->settings['expires'];//ini_get("session.gc_maxlifetime");
+
+		//check if anything changed in the session, only send if has changed
+		if (!empty($this->redis->session_stat[$key]) && $this->redis->session_stat[$key] == md5($session_data)) {
+			//just sending EXPIRE should save a lot of bandwidth!
+			$this->redis->setTimeout($key, $lifetime);
+		} else {
+			$this->redis->setex($key, $lifetime, $session_data);
 		}
 
-		// if cookie.lifetime is set to 0 and there is no existing key in the database we set the expire time to 1 year
-		// think autologin
-		if ( $this->settings['cookie.lifetime'] === 0 && !$this->redis->exists($session_id) ) {
-			$this->redis->hSet( $session_id, 'expires', (time() + 31556926) );
-		// else if the cookie lifetime is NOT endless, we set the expire time to now + settings defined lifetime
-		} else if ( $this->settings['cookie.lifetime'] != 0 ) {
-			$this->redis->hSet( $session_id, 'expires', (time() + $this->settings['expires']) );
-		}
-
-		// finally we set the data for our session
-		return $this->redis->hSet( $session_id, 'data', $session_data );
 	}
 
 	/**
@@ -173,7 +169,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	 */
 	public function destroy( $session_id )
 	{
-		$this->redis->delete($session_id);
+		$this->redis->delete(session_name().":".$session_id);
 		return true;
 	}
 

@@ -7,14 +7,14 @@ use
 ================================
 
 ```php
-$app->add($session = new Slim_Middleware_SessionRedis());
+$app->add($session = new Slim_Middleware_SessionRedis(array(
+					'expires'=>3600,
+					'sessionid'=>$_COOKIE['session_cookie_name'],
+					'name'=>'session_cookie_name')));
+
 $app->get('/', function()
 use ($app, $session){
-	if ( !$_SESSION ) {
-		// session fixation is bad!
-		$session->regenerate_id();
-		$_SESSION['key'] = 'value';
-	}
-	print_r($_SESSION);
+	// this will be saved in redis
+	$_SESSION['key'] = 'value';
 });
 ```
