@@ -131,7 +131,7 @@ class Slim_Middleware_SessionRedis extends Slim_Middleware
 	{
 		// if our session has expired we don't wish to return the data so return the destroy method
 		if ( $this->redis->hGet($session_id, 'expires') < time() ) {
-			return $this->redis->destroy($session_id);
+			return $this->destroy($session_id);
 		}
 		// retrieve the data for our session
 		return $this->redis->hGet($session_id, 'data');
